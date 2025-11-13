@@ -136,6 +136,13 @@ class CarDealerScraper:
             page_source = self.driver.page_source
             soup = BeautifulSoup(page_source, 'lxml')
 
+            # Debug: Log page title to verify we got the right page
+            page_title = soup.find('title')
+            logger.info(f"Page title: {page_title.get_text() if page_title else 'No title found'}")
+
+            # Debug: Save HTML snippet for analysis
+            logger.info(f"Page source length: {len(page_source)} characters")
+
             # Try different common selectors for vehicle listings
             # These are common patterns used by dealership websites
             vehicle_selectors = [

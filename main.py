@@ -121,6 +121,46 @@ async def scrape_inventory_post(
     return await scrape_inventory(url=url, llm_format=llm_format, headless=headless)
 
 
+@app.get("/debug")
+async def debug_page(url: str = "https://www.usautosofdallas.com/inventory"):
+    """
+    Debug endpoint to see what the scraper is actually retrieving
+    """
+    try:
+        from scraper import CarDealerScraper
+        from bs4 import BeautifulSoup
+
+        scraper = CarDealerScraper(headless=True)
+        scraper._init_driver()
+
+        scraper.driver.get(url)
+        import time
+        time.sleep(3)  # Wait for page to load
+
+        page_source = scraper.driver.page_source
+        soup = BeautifulSoup(page_source, 'lxml')
+
+        page_title = soup.find('title')
+
+        # Find all links
+        all_links = [a.get('href') for a in soup.find_all('a', href=True)][:20]
+
+        # Find common divs
+        divs_with_class = [str(div.get('class')) for div in soup.find_all('div', class_=True)][:20]
+
+        scraper._close_driver()
+
+        return {
+            "page_title": page_title.get_text() if page_title else "No title",
+            "page_length": len(page_source),
+            "sample_links": all_links,
+            "sample_div_classes": list(set(divs_with_class)),
+            "html_snippet": page_source[:1000]
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
