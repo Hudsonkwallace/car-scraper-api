@@ -155,25 +155,37 @@ class CarDealerScraper:
             # Debug: Save HTML snippet for analysis
             logger.info(f"Page source length: {len(page_source)} characters")
 
-            # Try different common selectors for vehicle listings
-            # These are common patterns used by dealership websites
-            vehicle_selectors = [
-                {'class': 'vehicle-card'},
-                {'class': 'inventory-item'},
-                {'class': 'car-item'},
-                {'class': 'vehicle-listing'},
-                {'class': 'vehicle'},
-                {'class': 'inventory-vehicle'},
-                {'data-type': 'vehicle'},
-            ]
+            # Wait a bit more for dynamic content to load
+            import time
+            time.sleep(3)
 
+            # Get fresh page source after wait
+            page_source = self.driver.page_source
+            soup = BeautifulSoup(page_source, 'lxml')
+
+            # This site uses DWS (Dealer Website Solutions) framework
+            # Look for vehicle containers with dws classes
             vehicle_elements = []
-            for selector in vehicle_selectors:
-                elements = soup.find_all('div', selector)
-                if elements:
-                    logger.info(f"Found {len(elements)} vehicles using selector: {selector}")
-                    vehicle_elements = elements
-                    break
+
+            # Try DWS-specific selectors first
+            dws_vehicle_items = soup.find_all('div', class_=lambda x: x and 'dws-vehicle-item' in str(x))
+            if dws_vehicle_items:
+                logger.info(f"Found {len(dws_vehicle_items)} vehicles using DWS vehicle-item class")
+                vehicle_elements = dws_vehicle_items
+
+            # Try alternative DWS selectors
+            if not vehicle_elements:
+                dws_listings = soup.find_all('div', class_=lambda x: x and 'dws-listing' in str(x))
+                if dws_listings:
+                    logger.info(f"Found {len(dws_listings)} vehicles using DWS listing class")
+                    vehicle_elements = dws_listings
+
+            # Try finding by data attributes
+            if not vehicle_elements:
+                data_vehicle_elems = soup.find_all('div', attrs={'data-vehicle-id': True})
+                if data_vehicle_elems:
+                    logger.info(f"Found {len(data_vehicle_elems)} vehicles using data-vehicle-id attribute")
+                    vehicle_elements = data_vehicle_elems
 
             # If no specific vehicle cards found, try to find individual vehicle links
             if not vehicle_elements:
@@ -224,23 +236,41 @@ class CarDealerScraper:
         """Parse a vehicle card element"""
         car_data = {}
 
-        # Extract title/name
-        title_elem = (element.find('h2') or element.find('h3') or
-                     element.find('h4') or element.find(class_=re.compile(r'title|name')))
-        if title_elem:
-            title = title_elem.get_text(strip=True)
-            parsed = self._parse_vehicle_title(title)
-            car_data.update(parsed)
+        try:
+            # Extract title/name - DWS specific selectors
+            title_elem = (
+                element.find(class_=re.compile(r'dws.*title|title.*dws', re.I)) or
+                element.find('h2') or element.find('h3') or
+                element.find('h4') or element.find(class_=re.compile(r'title|name|vehicle.*name', re.I))
+            )
+            if title_elem:
+                title = title_elem.get_text(strip=True)
+                if title:  # Only parse if we have a title
+                    parsed = self._parse_vehicle_title(title)
+                    car_data.update(parsed)
 
-        # Extract price
-        price_elem = element.find(class_=re.compile(r'price'))
-        if price_elem:
-            car_data['price'] = self._extract_price(price_elem.get_text(strip=True))
+            # Extract price - DWS specific
+            price_elem = (
+                element.find(class_=re.compile(r'dws.*price|price.*dws', re.I)) or
+                element.find(class_=re.compile(r'price', re.I))
+            )
+            if price_elem:
+                price_text = price_elem.get_text(strip=True)
+                if price_text:
+                    car_data['price'] = self._extract_price(price_text)
 
-        # Extract mileage
-        mileage_elem = element.find(class_=re.compile(r'mileage|miles'))
-        if mileage_elem:
-            car_data['mileage'] = self._extract_number(mileage_elem.get_text(strip=True))
+            # Extract mileage - DWS specific
+            mileage_elem = (
+                element.find(class_=re.compile(r'dws.*mileage|mileage.*dws', re.I)) or
+                element.find(class_=re.compile(r'mileage|miles|odometer', re.I))
+            )
+            if mileage_elem:
+                mileage_text = mileage_elem.get_text(strip=True)
+                if mileage_text:
+                    car_data['mileage'] = self._extract_number(mileage_text)
+        except Exception as e:
+            logger.error(f"Error extracting vehicle data: {e}")
+            return None
 
         # Extract link
         link_elem = element.find('a', href=True)
