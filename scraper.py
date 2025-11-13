@@ -40,6 +40,9 @@ class CarDealerScraper:
         chrome_bin = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
         chromedriver_path = shutil.which("chromedriver")
 
+        logger.info(f"Chrome binary detected: {chrome_bin}")
+        logger.info(f"ChromeDriver detected: {chromedriver_path}")
+
         if chrome_bin:
             logger.info(f"Using system Chrome at: {chrome_bin}")
             chrome_options.binary_location = chrome_bin
@@ -47,11 +50,20 @@ class CarDealerScraper:
         if chromedriver_path:
             logger.info(f"Using system ChromeDriver at: {chromedriver_path}")
             service = Service(chromedriver_path)
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
         else:
-            logger.info("Using webdriver-manager to download ChromeDriver")
-            service = Service(ChromeDriverManager().install())
-
-        self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            logger.info("No system ChromeDriver found, trying webdriver-manager")
+            try:
+                # Set Chrome binary path for webdriver-manager
+                if chrome_bin:
+                    os.environ['WDM_CHROME_PATH'] = chrome_bin
+                service = Service(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            except Exception as e:
+                logger.error(f"webdriver-manager failed: {e}")
+                # Last resort: try without service specification
+                logger.info("Attempting to initialize Chrome without explicit service")
+                self.driver = webdriver.Chrome(options=chrome_options)
 
     def _close_driver(self):
         """Close the WebDriver"""
