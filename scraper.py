@@ -55,23 +55,27 @@ class CarDealerScraper:
             logger.info(f"Using system Chrome at: {chrome_bin}")
             chrome_options.binary_location = chrome_bin
 
-        if chromedriver_path:
+        # If we found system chromedriver, use it directly
+        if chromedriver_path and os.path.exists(chromedriver_path):
             logger.info(f"Using system ChromeDriver at: {chromedriver_path}")
             service = Service(chromedriver_path)
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
-        else:
-            logger.info("No system ChromeDriver found, trying webdriver-manager")
+        # If we have chromium installed (Railway), try without explicit service
+        elif chrome_bin:
+            logger.info("System Chrome found but no chromedriver in PATH, trying default initialization")
             try:
-                # Set Chrome binary path for webdriver-manager
-                if chrome_bin:
-                    os.environ['WDM_CHROME_PATH'] = chrome_bin
+                self.driver = webdriver.Chrome(options=chrome_options)
+            except Exception as e:
+                logger.error(f"Default initialization failed: {e}")
+                # Fallback to webdriver-manager as last resort
+                logger.info("Trying webdriver-manager as fallback")
                 service = Service(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            except Exception as e:
-                logger.error(f"webdriver-manager failed: {e}")
-                # Last resort: try without service specification
-                logger.info("Attempting to initialize Chrome without explicit service")
-                self.driver = webdriver.Chrome(options=chrome_options)
+        # Local development - use webdriver-manager
+        else:
+            logger.info("No system Chrome found, using webdriver-manager")
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
 
     def _close_driver(self):
         """Close the WebDriver"""
