@@ -38,7 +38,15 @@ class CarDealerScraper:
 
         # Check if running in Railway/Nixpacks environment
         chrome_bin = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
-        chromedriver_path = shutil.which("chromedriver")
+
+        # Try multiple possible chromedriver locations
+        chromedriver_path = (
+            shutil.which("chromedriver") or
+            shutil.which("chromium-chromedriver") or
+            shutil.which("chromedriver-chromium") or
+            "/usr/bin/chromedriver" if os.path.exists("/usr/bin/chromedriver") else None or
+            "/usr/lib/chromium-browser/chromedriver" if os.path.exists("/usr/lib/chromium-browser/chromedriver") else None
+        )
 
         logger.info(f"Chrome binary detected: {chrome_bin}")
         logger.info(f"ChromeDriver detected: {chromedriver_path}")
