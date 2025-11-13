@@ -24,15 +24,33 @@ class CarDealerScraper:
 
     def _init_driver(self):
         """Initialize Selenium WebDriver"""
+        import os
+        import shutil
+
         chrome_options = Options()
         if self.headless:
-            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-        service = Service(ChromeDriverManager().install())
+        # Check if running in Railway/Nixpacks environment
+        chrome_bin = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
+        chromedriver_path = shutil.which("chromedriver")
+
+        if chrome_bin:
+            logger.info(f"Using system Chrome at: {chrome_bin}")
+            chrome_options.binary_location = chrome_bin
+
+        if chromedriver_path:
+            logger.info(f"Using system ChromeDriver at: {chromedriver_path}")
+            service = Service(chromedriver_path)
+        else:
+            logger.info("Using webdriver-manager to download ChromeDriver")
+            service = Service(ChromeDriverManager().install())
+
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
 
     def _close_driver(self):
